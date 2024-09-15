@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adicionar Imagem</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js';
+    import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-auth.js';
+
+    // Configuração do Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyA4yHXgC5sVKdXdQHB6rQTcgllpc7TnrNI",
+      authDomain: "radio-app-brasil.firebaseapp.com",
+      projectId: "radio-app-brasil",
+      storageBucket: "radio-app-brasil.appspot.com",
+      messagingSenderId: "47401748034",
+      appId: "1:47401748034:android:54fbbdb4a469cd6106cfdb"
+    };
+
+    // Inicializa o Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const imageUrlInput = document.getElementById('image-url');
+      const imagePreview = document.getElementById('image-preview');
+      const uploadButton = document.getElementById('upload-button');
+      const message = document.getElementById('message');
+
+      // Atualiza a visualização da imagem
+      imageUrlInput.addEventListener('input', () => {
+        const imageUrl = imageUrlInput.value;
+        if (imageUrl) {
+          imagePreview.src = imageUrl;
+          imagePreview.style.display = 'block';
+        } else {
+          imagePreview.style.display = 'none';
+        }
+      });
+
+      // Verifica se o usuário está autenticado
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          const uid = user.uid; // Obtém o UID do usuário autenticado
+
+          // Envia a URL da imagem para o Firebase
+          uploadButton.addEventListener('click', async () => {
+            const imageUrl = imageUrlInput.value;
+            if (imageUrl) {
+              try {
+                // Define o caminho do documento com base no UID do usuário
+                const docRef = doc(db, 'usuario', `${uid}`);
+                
+                await setDoc(docRef, {
+                  imagem: imageUrl
+                  
+                },);
+
+                message.textContent = 'Imagem adicionada com sucesso!';
+                imageUrlInput.value = '';
+                imagePreview.style.display = 'none';
+              } catch (error) {
+                message.textContent = 'Erro ao adicionar imagem: ' + error.message;
+              }
+            } else {
+              message.textContent = 'Por favor, insira uma URL de imagem.';
+            }
+          });
+        } else {
+          // Usuário não autenticado, redirecionar para a página de login
+          message.textContent = 'Usuário não autenticado. Redirecionando para o login...';
+          window.location.href = 'login.html';
+        }
+      });
+    });
+  </script>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Adicionar Imagem</h1>
+    <input type="text" id="image-url" placeholder="Cole a URL da imagem aqui">
+    <img id="image-preview" src="" alt="Pré-visualização da Imagem" style="display:none;">
+    <button id="upload-button">Adicionar Imagem</button>
+    <p id="message"></p>
+  </div>
+</body>
+
+</html>
