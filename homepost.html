@@ -6,10 +6,144 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Adicionar Imagem</title>
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      background-color: #f4f4f9;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      margin-bottom: 1rem;
+      color: #333;
+      font-size: 2rem;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 0.5rem;
+    }
+
+    #file-input, #link-url, #upload-button {
+      display: block;
+      width: 100%;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 1rem;
+    }
+
+    #file-input {
+      padding: 0.5rem;
+      background-color: #fafafa;
+    }
+
+    #upload-button {
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background-color 0.3s, transform 0.3s;
+    }
+
+    #upload-button:hover {
+      background-color: #0056b3;
+      transform: scale(1.02);
+    }
+
+    #image-preview {
+      max-width: 100%;
+      height: auto;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    #message {
+      color: #d9534f;
+      font-size: 0.875rem;
+    }
+
+    #image-gallery {
+      margin-top: 2rem;
+    }
+
+    #gallery-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .gallery-item {
+      position: relative;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      width: calc(25% - 1rem); /* Ajuste conforme necessário */
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      background-color: #fff;
+      overflow: hidden;
+      transition: transform 0.3s;
+    }
+
+    .gallery-item:hover {
+      transform: scale(1.02);
+    }
+
+    .gallery-image {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .gallery-link {
+      display: block;
+      margin-top: 0.5rem;
+      color: #007bff;
+      text-decoration: none;
+      font-size: 0.875rem;
+    }
+
+    .gallery-link:hover {
+      text-decoration: underline;
+    }
+
+    .delete-button {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: #d9534f;
+      color: white;
+      border: none;
+      padding: 0.5rem;
+      cursor: pointer;
+      border-radius: 0 0 0 8px;
+      font-size: 0.75rem;
+      transition: background-color 0.3s;
+    }
+
+    .delete-button:hover {
+      background-color: #c9302c;
+    }
+  </style>
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js';
-    import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js';
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-auth.js';
+    import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-storage.js';
 
     // Configuração do Firebase
     const firebaseConfig = {
@@ -25,19 +159,43 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+    const storage = getStorage(app);
 
     document.addEventListener('DOMContentLoaded', () => {
-      const imageUrlInput = document.getElementById('image-url');
+      const fileInput = document.getElementById('file-input');
+      const linkUrlInput = document.getElementById('link-url');
       const imagePreview = document.getElementById('image-preview');
       const uploadButton = document.getElementById('upload-button');
       const message = document.getElementById('message');
+      const galleryContainer = document.getElementById('gallery-container');
 
-      // Atualiza a visualização da imagem
-      imageUrlInput.addEventListener('input', () => {
-        const imageUrl = imageUrlInput.value;
-        if (imageUrl) {
-          imagePreview.src = imageUrl;
-          imagePreview.style.display = 'block';
+      // Defina a resolução máxima permitida (exemplo: 1920x1080)
+      const maxWidth = 1920;
+      const maxHeight = 1080;
+
+      // Atualiza a visualização da imagem e verifica a resolução
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+
+            img.onload = () => {
+              // Verifica se a resolução está dentro dos limites permitidos
+              if (img.width > maxWidth || img.height > maxHeight) {
+                message.textContent = `Erro: A resolução da imagem excede o máximo permitido (${maxWidth}x${maxHeight}px). A imagem atual tem ${img.width}x${img.height}px.`;
+                fileInput.value = ''; // Limpa o input de arquivo
+                imagePreview.style.display = 'none'; // Oculta a visualização da imagem
+              } else {
+                imagePreview.src = event.target.result;
+                imagePreview.style.display = 'block';
+                message.textContent = ''; // Limpa a mensagem de erro
+              }
+            };
+          };
+          reader.readAsDataURL(file);
         } else {
           imagePreview.style.display = 'none';
         }
@@ -48,33 +206,122 @@
         if (user) {
           const uid = user.uid; // Obtém o UID do usuário autenticado
 
-          // Envia a URL da imagem para o Firebase
+          // Envia a imagem e o link para o Firebase
           uploadButton.addEventListener('click', async () => {
-            const imageUrl = imageUrlInput.value;
-            if (imageUrl) {
+            const file = fileInput.files[0];
+            const linkUrl = linkUrlInput.value;
+
+            if (file && linkUrl) {
               try {
+                // Upload da imagem para o Firebase Storage
+                const storageRef = ref(storage, `imagens/${uid}/${file.name}`);
+                await uploadBytes(storageRef, file);
+
+                // Obtém a URL de download da imagem
+                const imageUrl = await getDownloadURL(storageRef);
+
                 // Define o caminho do documento com base no UID do usuário
                 const docRef = doc(db, 'usuario', `${uid}`);
-                
-                await setDoc(docRef, {
-                  imagem: imageUrl
-                  
-                },);
 
-                message.textContent = 'Imagem adicionada com sucesso!';
-                imageUrlInput.value = '';
+                // Verifica se o documento já existe
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                  // Se o documento existir, atualiza o array
+                  await updateDoc(docRef, {
+                    imagens: arrayUnion({ imagem: imageUrl, link: linkUrl, storagePath: storageRef.fullPath })
+                  });
+                } else {
+                  // Se o documento não existir, cria o documento e adiciona o array
+                  await setDoc(docRef, {
+                    imagens: [{ imagem: imageUrl, link: linkUrl, storagePath: storageRef.fullPath }]
+                  });
+                }
+
+                message.textContent = 'Imagem e link adicionados ao array com sucesso!';
+                fileInput.value = '';
+                linkUrlInput.value = '';
                 imagePreview.style.display = 'none';
+
+                // Atualiza a galeria de imagens
+                loadImages();
               } catch (error) {
-                message.textContent = 'Erro ao adicionar imagem: ' + error.message;
+                message.textContent = 'Erro ao adicionar imagem e link: ' + error.message;
               }
             } else {
-              message.textContent = 'Por favor, insira uma URL de imagem.';
+              message.textContent = 'Por favor, selecione uma imagem e insira um link.';
             }
           });
+
+          // Função para carregar e exibir imagens da galeria
+          async function loadImages() {
+            try {
+              const docRef = doc(db, 'usuario', `${uid}`);
+              const docSnap = await getDoc(docRef);
+
+              if (docSnap.exists()) {
+                const imagens = docSnap.data().imagens || [];
+
+                // Limpa o container da galeria antes de adicionar novas imagens
+                galleryContainer.innerHTML = '';
+
+                imagens.forEach(imgData => {
+                  // Cria elementos para a imagem, o link e o botão de exclusão
+                  const imgElement = document.createElement('img');
+                  const linkElement = document.createElement('a');
+                  const deleteButton = document.createElement('button');
+                  const div = document.createElement('div');
+
+                  imgElement.src = imgData.imagem;
+                  imgElement.alt = 'Imagem do Firebase';
+                  imgElement.classList.add('gallery-image');
+
+                  linkElement.href = imgData.link;
+                  linkElement.textContent = 'Link relacionado';
+                  linkElement.target = '_blank';
+                  linkElement.classList.add('gallery-link');
+
+                  deleteButton.textContent = 'Excluir';
+                  deleteButton.classList.add('delete-button');
+                  deleteButton.addEventListener('click', async () => {
+                    try {
+                      // Remove a imagem do Firebase Storage
+                      const storageRef = ref(storage, imgData.storagePath);
+                      await deleteObject(storageRef);
+
+                      // Remove a imagem do Firestore
+                      const docRef = doc(db, 'usuario', `${uid}`);
+                      await updateDoc(docRef, {
+                        imagens: arrayRemove(imgData)
+                      });
+
+                      // Atualiza a galeria de imagens
+                      loadImages();
+                    } catch (error) {
+                      message.textContent = 'Erro ao excluir imagem: ' + error.message;
+                    }
+                  });
+
+                  div.classList.add('gallery-item');
+                  div.appendChild(imgElement);
+                  div.appendChild(linkElement);
+                  div.appendChild(deleteButton);
+                  galleryContainer.appendChild(div);
+                });
+              } else {
+                galleryContainer.innerHTML = 'Nenhuma imagem encontrada.';
+              }
+            } catch (error) {
+              galleryContainer.innerHTML = 'Erro ao carregar imagens: ' + error.message;
+            }
+          }
+
+          // Chama a função para carregar as imagens quando a página é carregada
+          loadImages();
         } else {
           // Usuário não autenticado, redirecionar para a página de login
           message.textContent = 'Usuário não autenticado. Redirecionando para o login...';
-          window.location.href = 'login.html';
+          window.location.href = 'index.html';
         }
       });
     });
@@ -84,10 +331,16 @@
 <body>
   <div class="container">
     <h1>Adicionar Imagem</h1>
-    <input type="text" id="image-url" placeholder="Cole a URL da imagem aqui">
+    <input type="file" id="file-input" accept="image/*">
+    <input type="text" id="link-url" placeholder="Cole o URL adicional aqui">
     <img id="image-preview" src="" alt="Pré-visualização da Imagem" style="display:none;">
     <button id="upload-button">Adicionar Imagem</button>
     <p id="message"></p>
+    
+    <section id="image-gallery">
+      <h2>Galeria de Imagens</h2>
+      <div id="gallery-container"></div>
+    </section>
   </div>
 </body>
 
